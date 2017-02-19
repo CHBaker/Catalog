@@ -23,7 +23,7 @@ class webServerHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         try:
-            # Objective Create new restaurant page
+            # Create new restaurant page
             if self.path.endswith("/restaurants/new"):
                 self.send_response(200)
                 self.send_header('Content-type', 'text/html')
@@ -38,10 +38,12 @@ class webServerHandler(BaseHTTPRequestHandler):
                 self.wfile.write(output)
                 return
 
+            # Edit restaurant name
             if self.path.endswith("/edit-restaurant"):
                 restaurantIDPath = self.path.split("/")[2]
                 myRestaurantQuery = session.query(Restaurant).filter_by(
                     id=restaurantIDPath).one()
+                
                 if myRestaurantQuery:
                     self.send_response(200)
                     self.send_header('Content-type', 'text/html')
@@ -58,35 +60,61 @@ class webServerHandler(BaseHTTPRequestHandler):
 
                     self.wfile.write(output)
 
+            # Delete restaurant
+            if self.path.endswith("/delete-restaurant"):
+                restaurantIDPath = self.path.split("/")[2]
+                myRestaurantQuery = session.query(Restaurant).filter_by(
+                    id=restaurantIDPath).one()
+
+                if myRestaurantQuery:
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/html')
+                    self.end_headers()
+                    output = "<html><body>"
+                    output += "<h1>Are you sure you want to delete<br>"
+                    output += myRestaurantQuery.name
+                    output += "?</h1>"
+                    output += "<form method='POST' enctype='multipart/form-data' action = '/restaurants/%s/delete-restaurant' >" % restaurantIDPath
+                    output += "<input type='radio' name='delete' value='True' > Yes<br>"
+                    output += "<input type='radio' name='delete' value='False' > No<br>"
+                    output += "<input type = 'submit' value = 'Submit'>"
+                    output += "</form>"
+                    output += "</body></html>"
+
+                    self.wfile.write(output)
+
+            # Main page
             if self.path.endswith("/restaurants"):
                 restaurants = session.query(Restaurant).all()
                 output = ""
-                # Objective 3 Step 1 - Create a Link to create a new menu item
+                # link for new restaurant
                 output += "<a href = '/restaurants/new' > Make a New Restaurant Here </a></br></br>"
 
                 self.send_response(200)
                 self.send_header('Content-type', 'text/html')
                 self.end_headers()
                 output += "<html><body>"
+
                 for restaurant in restaurants:
                     output += restaurant.name
-                    output += "</br>"
-                    # Objective 2 -- Add Edit and Delete Links
-                    # Objective 4 -- Replace Edit href
+                    output += "</br><br>"
+                    # Add Edit and Delete Links
                     output += "<a href ='/restaurants/%s/edit-restaurant' >Edit </a> " % restaurant.id
                     output += "</br>"
-                    output += "<a href =' #'> Delete </a>"
+                    output += "<a href ='/restaurants/%s/delete-restaurant' > Delete </a>" % restaurant.id
                     output += "</br></br></br>"
 
                 output += "</body></html>"
                 self.wfile.write(output)
                 return
+
         except IOError:
             self.send_error(404, 'File Not Found: %s' % self.path)
 
-    # Objective 3 Step 3- Make POST method
+
     def do_POST(self):
         try:
+            # Get new restaurant name update db
             if self.path.endswith("/edit-restaurant"):
                 ctype, pdict = cgi.parse_header(
                     self.headers.getheader('content-type'))
@@ -106,9 +134,37 @@ class webServerHandler(BaseHTTPRequestHandler):
                         self.send_header('Location', '/restaurants')
                         self.end_headers()
 
+            # Get Radio button values to delete from db
+            if self.path.endswith("/delete-restaurant"):
+                ctype, pdict = cgi.parse_header(
+                    self.headers.getheader('content-type'))
+
+                if ctype == 'multipart/form-data':
+                    fields = cgi.parse_multipart(self.rfile, pdict)
+                    messagecontent = fields.get('delete')
+                    restaurantIDPath = self.path.split("/")[2]
+                    myRestaurantQuery = session.query(Restaurant).filter_by(
+                        id=restaurantIDPath).one()
+
+                    if myRestaurantQuery != []:
+                        if messagecontent == ['True']:
+                            session.delete(myRestaurantQuery)
+                            session.commit()
+                            self.send_response(301)
+                            self.send_header('Content-type', 'text/html')
+                            self.send_header('Location', '/restaurants')
+                            self.end_headers()
+                        else:
+                            self.send_response(301)
+                            self.send_header('Content-type', 'text/html')
+                            self.send_header('Location', '/restaurants')
+                            self.end_headers()
+
+            # Get new restaurant name and create in db
             if self.path.endswith("/restaurants/new"):
                 ctype, pdict = cgi.parse_header(
                     self.headers.getheader('content-type'))
+
                 if ctype == 'multipart/form-data':
                     fields = cgi.parse_multipart(self.rfile, pdict)
                     messagecontent = fields.get('newRestaurantName')
